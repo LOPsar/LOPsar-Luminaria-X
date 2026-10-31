@@ -98,6 +98,22 @@ button.render.on{background:var(--amber);color:#1a1205}
 #scene{max-height:44%;overflow:auto;display:grid;grid-template-columns:1fr 1fr;gap:0 10px}
 #scene>.sec,#scene>.f,#scene>.meter{grid-column:1/-1}
 #scene .chk{margin-bottom:4px}
+
+/* ---- Cuenta / Hub ---- */
+a.btn{display:inline-flex;align-items:center;background:var(--panel2);border:1px solid var(--line);border-radius:6px;padding:6px 11px;min-height:32px;color:var(--fg);text-decoration:none}
+a.btn:hover{border-color:#3b4250}
+.plpill{font:600 11px var(--mono);letter-spacing:.06em;border:1px solid var(--line);border-radius:999px;padding:4px 9px;color:var(--mut);align-self:center;white-space:nowrap}
+.plpill.pro{border-color:var(--amber);color:var(--amber)}
+.lock{font:600 9px var(--mono);letter-spacing:.08em;color:#1a1205;background:var(--amber);border-radius:3px;padding:1px 4px;margin-left:6px;vertical-align:middle}
+.ov{position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:50;padding:16px}
+.md{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:20px;width:min(420px,100%);max-height:90vh;overflow:auto;display:flex;flex-direction:column;gap:10px}
+.md h2{margin:0;font:700 26px var(--disp);letter-spacing:.04em;text-transform:uppercase}
+.md p{margin:0;color:var(--mut)}
+.md .row{display:flex;gap:8px;flex-wrap:wrap}.md .row>*{flex:1}
+.md .err{color:var(--red);font-size:13px;min-height:1em}
+.md .pri{background:var(--amber);color:#1a1205;border-color:var(--amber);font-weight:600}
+.md .gbtn{background:#fff;color:#222;font-weight:600}
+.md .sep{display:flex;align-items:center;gap:10px;color:var(--mut);font-size:12px}.md .sep:before,.md .sep:after{content:"";height:1px;background:var(--line);flex:1}
 </style>
 
 <div id="app">
@@ -106,6 +122,7 @@ button.render.on{background:var(--amber);color:#1a1205}
   <div class="seg" id="viewSeg"><button data-v="studio" class="on">Estudio</button><button data-v="planta">Planta</button><button data-v="camara">Cámara</button></div>
   <div class="seg" id="modeSeg"><button data-m="translate" class="on">Mover</button><button data-m="rotate">Rotar</button><button data-m="scale">Escalar</button></div>
   <div class="actions">
+   <a class="btn" id="hubLink" href="#" hidden>‹ Hub</a><span class="plpill" id="plpill" hidden></span><button id="acct">Iniciar sesión</button>
    <button id="rbtn" class="render" title="Acumula muestras para sombras suaves físicamente correctas">Render físico</button><span id="rprog"></span><select id="rsamp" aria-label="Muestras" style="width:auto"><option value="64">64 muestras</option><option value="128" selected>128 muestras</option><option value="384">384 muestras</option></select>
    <select id="preset" aria-label="Escenas de ejemplo" style="width:auto"><option value="">Escenas…</option><option value="interview">Entrevista de 3 puntos</option><option value="empty">Estudio vacío</option></select>
    <button id="save">Guardar</button><button id="load">Cargar</button>
@@ -149,6 +166,32 @@ button.render.on{background:var(--amber);color:#1a1205}
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/lights/RectAreaLightUniformsLib.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script type="module">
+/* Conexión con el Hub: misma cuenta de Firebase. El plan (Gratis/Pro) se lee de hub_profiles/{uid}, que solo se modifica desde el Hub o la consola. */
+const FIREBASE = {apiKey:"AIzaSyArE42nx13HuxiIbBYJRf-Mwu_8jxnlnl4",authDomain:"inventario-tai.firebaseapp.com",projectId:"inventario-tai",storageBucket:"inventario-tai.firebasestorage.app",messagingSenderId:"304149994706",appId:"1:304149994706:web:85e6535d499cf1c038e10b"};
+const PROFILES = "hub_profiles";
+try {
+  const [appM, authM, fsM] = await Promise.all([
+    import("https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js"),
+    import("https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js"),
+    import("https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js")
+  ]);
+  const app = appM.initializeApp(FIREBASE), auth = authM.getAuth(app), db = fsM.getFirestore(app);
+  window.FB = {
+    onAuth: (cb) => authM.onAuthStateChanged(auth, cb),
+    signIn: (e, p) => authM.signInWithEmailAndPassword(auth, e, p),
+    signUp: (e, p) => authM.createUserWithEmailAndPassword(auth, e, p),
+    signOut: () => authM.signOut(auth),
+    google: async () => {
+      const p = new authM.GoogleAuthProvider(); p.setCustomParameters({ prompt: "select_account" });
+      try { await authM.signInWithPopup(auth, p); return "ok"; }
+      catch (e) { if (e && (e.code === "auth/popup-blocked" || e.code === "auth/operation-not-supported-in-this-environment")) { await authM.signInWithRedirect(auth, p); return "redirect"; } throw e; }
+    },
+    plan: async (uid) => { try { const s = await fsM.getDoc(fsM.doc(db, PROFILES, uid)); return s.exists() && s.data().plan === "pro" ? "pro" : "free"; } catch (e) { return "free"; } }
+  };
+} catch (e) { window.FB_ERROR = String((e && e.message) || e); }
+window.dispatchEvent(new Event("fb-ready"));
+</script>
 <script>(function(){'use strict';
 const T=THREE,D2R=Math.PI/180;
 const clamp=(v,a,b)=>Math.min(b,Math.max(a,v));
@@ -690,7 +733,7 @@ function impMsg(t,err){const m=$('#impMsg');if(m){m.textContent=t;m.style.color=
 async function expandFiles(list){const out=[];for(const f of list){if(/\.zip$/i.test(f.name)){if(!window.JSZip){impMsg('No se pudo cargar el lector de .zip. Sube los archivos sueltos.',1);continue;}
   const z=await JSZip.loadAsync(f),ps=[];z.forEach((p,e)=>{if(!e.dir&&!/__MACOSX/.test(p))ps.push(e.async('blob').then(bl=>{out.push(new File([bl],p.split('/').pop(),{type:bl.type}));}));});await Promise.all(ps);}
   else out.push(f);}return out;}
-async function importFiles(list){list=Array.from(list||[]);if(!list.length)return;
+async function importFiles(list){list=Array.from(list||[]);if(!list.length)return;if(!gate('import'))return;
  if(list.some(f=>/\.blend1?$/i.test(f.name))&&!list.some(f=>/\.(glb|gltf|zip)$/i.test(f.name))){impMsg('Los .blend no se pueden abrir en el navegador. En Blender: Archivo › Exportar › glTF 2.0 (.glb), con texturas empaquetadas, y súbelo aquí.',1);return;}
  let files;try{files=await expandFiles(list);}catch(e){impMsg('No se pudo leer el .zip.',1);return;}
  const main=files.find(f=>/\.glb$/i.test(f.name))||files.find(f=>/\.gltf$/i.test(f.name));
@@ -929,12 +972,53 @@ $('#oLbl').addEventListener('change',e=>opt.labels=e.target.checked);
 $('#oPip').addEventListener('change',e=>opt.pip=e.target.checked);
 $('#oSnap').addEventListener('change',e=>{opt.snap=e.target.checked;transform.setTranslationSnap(opt.snap?.1:null);transform.setRotationSnap(opt.snap?5*D2R:null);});
 $('#floorSel').addEventListener('change',e=>{opt.floor=e.target.value;setFloor(opt.floor);});
-$('#rbtn').addEventListener('click',()=>setQuality(!opt.quality));
-$('#rsamp').addEventListener('change',e=>{acc.max=+e.target.value;if(acc.n>acc.max)acc.n=acc.max;});
+$('#rbtn').addEventListener('click',()=>{if(!opt.quality&&!gate('render'))return;setQuality(!opt.quality);});
+$('#rsamp').addEventListener('change',e=>{if(e.target.value==='384'&&!gate('samples')){e.target.value=String(acc.max);return;}acc.max=+e.target.value;if(acc.n>acc.max)acc.n=acc.max;});
 $('#preset').addEventListener('change',e=>{if(e.target.value)loadPreset(e.target.value);e.target.value='';});
 const KEY='luminaria3d.escena.v2';
 $('#save').addEventListener('click',()=>{try{localStorage.setItem(KEY,JSON.stringify(serializeScene()));toast('Escena guardada en este navegador');}catch(_){toast('No se pudo guardar en este navegador');}});
 $('#load').addEventListener('click',()=>{try{const s=localStorage.getItem(KEY);if(!s){toast('Aún no hay una escena guardada');return;}loadScene(JSON.parse(s));toast('Escena cargada');}catch(_){toast('No se pudo cargar la escena');}});
+
+/* ===== Cuenta, Hub y funciones por plan =====
+   Niveles: 0 = sin cuenta · 1 = cuenta gratuita · 2 = plan Pro (lo decide el Hub). Cambia aquí qué función pide qué nivel. */
+const HUB_URL='https://lopsar.github.io/LOPsarHub/';
+const GATES={import:1,render:2,samples:2};
+const GATE_INFO={import:['Importar modelos propios','Importar tus propios modelos .glb, .gltf o .zip','Crea una cuenta gratuita para importar tus modelos 3D.'],
+ render:['Render físico','Render físico con sombras suaves acumuladas','El render físico es parte del plan Pro.'],
+ samples:['384 muestras','Render de máxima calidad (384 muestras)','Las 384 muestras son parte del plan Pro.']};
+const ACC={user:null,plan:'free'};
+const lvl=()=>!ACC.user?0:(ACC.plan==='pro'?2:1);
+function accModal(kids){const ov=h('div',{class:'ov',onclick:e=>{if(e.target===ov)ov.remove();}},h('div',{class:'md',role:'dialog','aria-modal':'true'},kids));document.body.append(ov);return ov;}
+function gate(k){if(lvl()>=GATES[k])return true;const need=GATES[k],info=GATE_INFO[k];
+ const ov=accModal([h('h2',{text:info[0]}),h('p',{text:info[2]}),
+  need===1?h('button',{class:'pri',text:'Iniciar sesión o crear cuenta',onclick:()=>{ov.remove();authModal();}})
+  :(ACC.user?h('a',{class:'btn pri',href:HUB_URL,text:'Obtener Pro en el Hub'}):h('div',{class:'row'},h('button',{text:'Iniciar sesión',onclick:()=>{ov.remove();authModal();}}),h('a',{class:'btn pri',href:HUB_URL,text:'Ver planes en el Hub'}))),
+  h('button',{text:'Ahora no',onclick:()=>ov.remove()})]);return false;}
+const AUTH_MSG={'auth/invalid-email':'El correo no es válido.','auth/missing-password':'Escribe tu contraseña.','auth/weak-password':'La contraseña debe tener al menos 6 caracteres.','auth/email-already-in-use':'Ese correo ya tiene cuenta. Usa «Iniciar sesión».','auth/invalid-credential':'Correo o contraseña incorrectos.','auth/wrong-password':'Correo o contraseña incorrectos.','auth/user-not-found':'Correo o contraseña incorrectos.','auth/too-many-requests':'Demasiados intentos. Espera unos minutos.','auth/network-request-failed':'Sin conexión. Revisa tu internet.','auth/operation-not-allowed':'Ese método de acceso no está activado en Firebase.','auth/unauthorized-domain':'Este dominio no está autorizado en Firebase (Authentication → Configuración → Dominios autorizados).','auth/popup-blocked':'El navegador bloqueó la ventana de Google. Permite las ventanas emergentes.','auth/popup-closed-by-user':'','auth/cancelled-popup-request':'','auth/account-exists-with-different-credential':'Ese correo ya existe con otro método. Entra con tu correo y contraseña.'};
+const authMsg=e=>{const c=(e&&e.code)||'';return c in AUTH_MSG?AUTH_MSG[c]:'No se pudo completar'+(c?' ('+c+')':'')+'.';};
+function authModal(){
+ if(!window.FB){toast('Firebase no está disponible. Revisa tu conexión.');return;}
+ if(ACC.user){const ov=accModal([h('h2',{text:'Tu cuenta'}),h('p',{text:ACC.user.email||''}),h('p',{text:'Plan '+(ACC.plan==='pro'?'Pro':'Gratis')+' · el plan se administra en el Hub.'}),
+   h('a',{class:'btn',href:HUB_URL,text:ACC.plan==='pro'?'Ir al Hub':'Ver planes en el Hub'}),h('button',{text:'Cerrar sesión',onclick:async()=>{try{await FB.signOut();}catch(e){}ov.remove();toast('Sesión cerrada');}}),h('button',{text:'Cerrar',onclick:()=>ov.remove()})]);return;}
+ let mode='in';const err=h('div',{class:'err',role:'alert'}),em=h('input',{type:'text',inputmode:'email',autocomplete:'email','aria-label':'Correo',placeholder:'correo@ejemplo.com'}),pw=h('input',{type:'password','aria-label':'Contraseña',placeholder:'Contraseña',autocomplete:'current-password'});
+ const go=h('button',{class:'pri',text:'Iniciar sesión'}),tg=h('button',{text:'¿No tienes cuenta? Crear cuenta'});
+ const ov=accModal([h('h2',{text:'Cuenta de LOPsar'}),h('p',{text:'Es la misma cuenta del Hub y de todas las apps. Puedes usar Luminaria sin cuenta; iniciar sesión desbloquea más funciones.'}),
+  h('button',{class:'gbtn',text:'Continuar con Google',onclick:async()=>{err.textContent='';try{const r=await FB.google();if(r!=='redirect'){ov.remove();toast('Sesión iniciada');}}catch(e){err.textContent=authMsg(e);}}}),
+  h('div',{class:'sep',text:'o con correo'}),em,pw,err,go,tg,h('button',{text:'Cancelar',onclick:()=>ov.remove()})]);
+ tg.onclick=()=>{mode=mode==='in'?'up':'in';go.textContent=mode==='in'?'Iniciar sesión':'Crear cuenta';tg.textContent=mode==='in'?'¿No tienes cuenta? Crear cuenta':'Ya tengo cuenta';pw.autocomplete=mode==='in'?'current-password':'new-password';err.textContent='';};
+ go.onclick=async()=>{err.textContent='';const e=em.value.trim();if(!e||!pw.value){err.textContent='Escribe tu correo y tu contraseña.';return;}go.disabled=true;
+  try{await (mode==='in'?FB.signIn(e,pw.value):FB.signUp(e,pw.value));ov.remove();toast('Sesión iniciada');}catch(x){err.textContent=authMsg(x);go.disabled=false;}};
+ pw.addEventListener('keydown',e=>{if(e.key==='Enter')go.click();});setTimeout(()=>em.focus(),30);}
+function paintAcc(){const b=$('#acct'),p=$('#plpill');b.textContent=ACC.user?'Mi cuenta':'Iniciar sesión';
+ p.hidden=!ACC.user;p.textContent='Plan '+(ACC.plan==='pro'?'Pro':'Gratis');p.classList.toggle('pro',ACC.plan==='pro');
+ const mark=(el,k)=>{if(!el)return;let t=el.querySelector('.lock');if(lvl()>=GATES[k]){if(t)t.remove();}else if(!t){t=h('span',{class:'lock',text:GATES[k]===2?'PRO':'CUENTA'});el.append(t);}};
+ mark($('#rbtn'),'render');}
+$('#acct').addEventListener('click',authModal);
+if(HUB_URL){const a=$('#hubLink');a.href=HUB_URL;a.hidden=false;}
+function initAcc(){if(!window.FB)return;FB.onAuth(async u=>{ACC.user=u?{uid:u.uid,email:u.email||''}:null;ACC.plan='free';paintAcc();if(u){const pl=await FB.plan(u.uid);if(ACC.user&&ACC.user.uid===u.uid){ACC.plan=pl;paintAcc();}}
+  if(lvl()<GATES.render&&opt.quality)setQuality(false);});}
+if(window.FB||window.FB_ERROR)initAcc();else window.addEventListener('fb-ready',initAcc,{once:true});
+paintAcc();
 
 opt.floor='gris';opt.quality=false;setFloor('gris');
 renderLib();setAmbient();updateCtl();initEnvUI();loadPreset('interview');renderProps();frame();setTimeout(histInit,900);
